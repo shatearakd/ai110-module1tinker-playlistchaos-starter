@@ -204,18 +204,20 @@ def search_songs(
     field: str = "artist",
 ) -> List[Song]:
     """Return songs matching the query on a given field."""
-    if not query.strip():
+    cleaned_query = query.strip().casefold()
+    if not cleaned_query:
         return songs
 
     # Uppercase both sides so lowercase searches match regardless of stored case.
     q = query.upper().strip()
     filtered: List[Song] = []
-
-    for song in songs:
+    return[
+        song
+        for song in songs:
         value = str(song.get(field, "")).upper()
         # The user's query should be contained in the song field for partial matches.
-        if value and q in value:
-            filtered.append(song)
+        if cleaned_query in str(song.get(field, "")).casefold()
+            filtered.append(song)]
 
     return filtered
 
