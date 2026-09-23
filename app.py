@@ -2,6 +2,7 @@ import streamlit as st
 
 from playlist_logic import (
     DEFAULT_PROFILE,
+    MAX_TAGS,
     Song,
     build_playlists,
     compute_playlist_stats,
@@ -11,6 +12,20 @@ from playlist_logic import (
     normalize_song,
     search_songs,
 )
+
+BASE_GENRES = ["rock", "lofi", "pop", "jazz", "electronic", "ambient", "other"]
+
+
+def genre_options():
+    """Return built-in genres plus genres and tags already in the playlist."""
+    options = BASE_GENRES[:]
+    for song in st.session_state.songs:
+        values = [song.get("genre", ""), *song.get("tags", [])]
+        for value in values:
+            value = str(value).strip()
+            if value and value not in options:
+                options.append(value)
+    return options
 
 
 def init_state():
@@ -180,6 +195,41 @@ def default_songs():
             "energy": 6,
             "tags": ["soul", "vocal"],
         },
+        {
+            "title": "Here Comes the Sun",
+            "artist": "The Beatles",
+            "genre": "rock",
+            "energy": 6,
+            "tags": ["classic", "uplifting"],
+        },
+        {
+            "title": "Watermelon Sugar",
+            "artist": "Harry Styles",
+            "genre": "pop",
+            "energy": 7,
+            "tags": ["summer", "dance"],
+        },
+        {
+            "title": "Electric Feel",
+            "artist": "MGMT",
+            "genre": "electronic",
+            "energy": 7,
+            "tags": ["indie", "synth"],
+        },
+        {
+            "title": "Dreams",
+            "artist": "Fleetwood Mac",
+            "genre": "rock",
+            "energy": 5,
+            "tags": ["classic", "dreamy"],
+        },
+        {
+            "title": "Lovely Day",
+            "artist": "Bill Withers",
+            "genre": "other",
+            "energy": 6,
+            "tags": ["soul", "uplifting"],
+        },
     ]
 
 
@@ -210,10 +260,15 @@ def profile_sidebar():
             value=int(profile.get("chill_max_energy", 3)),
         )
 
+    genres = genre_options()
+    current_genre = profile.get("favorite_genre", genres[0])
+    if current_genre not in genres:
+        current_genre = genres[0]
+
     profile["favorite_genre"] = st.sidebar.selectbox(
         "Favorite genre",
-        options=["rock", "lofi", "pop", "jazz", "electronic", "ambient", "other"],
-        index=0,
+        options=genres,
+        index=genres.index(current_genre),
     )
 
     profile["include_mixed"] = st.sidebar.checkbox(
@@ -232,14 +287,14 @@ def add_song_sidebar():
     artist = st.sidebar.text_input("Artist")
     genre = st.sidebar.selectbox(
         "Genre",
-        options=["rock", "lofi", "pop", "jazz", "electronic", "ambient", "other"],
+        options=genre_options(),
     )
     energy = st.sidebar.slider("Energy", min_value=1, max_value=10, value=5)
     tags_text = st.sidebar.text_input("Tags (comma separated)")
 
     if st.sidebar.button("Add to playlist"):
         raw_tags = [t.strip() for t in tags_text.split(",")]
-        tags = [t for t in raw_tags if t]
+        tags = [t for t in raw_tags if t][:MAX_TAGS]
 
         song: Song = {
             "title": title,
