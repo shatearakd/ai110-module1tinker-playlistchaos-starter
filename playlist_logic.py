@@ -23,21 +23,21 @@ def normalize_title(title: str) -> str:
     return title.strip()
 
 
-# This helper standardizes an artist name for reliable comparison.
-# It trims spaces and lowers the text so names like "Adele" and "adele"
-# are treated as the same artist.
+# This helper standardizes an artist name for reliable comparison and display.
+# It trims spaces and capitalizes each word so names like "adele" and "ADELE"
+# are stored consistently as "Adele".
 def normalize_artist(artist: str) -> str:
     """Normalize an artist name for comparisons."""
     if not artist:
         return ""
-    return artist.strip().lower()
+    return artist.strip().title()
 
 
 # This helper normalizes a genre string so the program can compare genres
 # consistently even if the original data uses different capitalization or spacing.
 def normalize_genre(genre: str) -> str:
     """Normalize a genre name for comparisons."""
-    return genre.lower().strip()
+    return genre.title().strip()
 
 
 # This function turns a raw song dictionary into the format the rest of the
@@ -183,7 +183,7 @@ def most_common_artist(songs: List[Song]) -> Tuple[str, int]:
     """Return the most common artist and count."""
     counts: Dict[str, int] = {}
     for song in songs:
-        artist = str(song.get("artist", ""))
+        artist = str(song.get("artist", "")).upper()
         if not artist:
             continue
         counts[artist] = counts.get(artist, 0) + 1
@@ -204,15 +204,17 @@ def search_songs(
     field: str = "artist",
 ) -> List[Song]:
     """Return songs matching the query on a given field."""
-    if not query:
+    if not query.strip():
         return songs
 
-    q = query.lower().strip()
+    # Uppercase both sides so lowercase searches match regardless of stored case.
+    q = query.upper().strip()
     filtered: List[Song] = []
 
     for song in songs:
-        value = str(song.get(field, "")).lower()
-        if value and value in q:
+        value = str(song.get(field, "")).upper()
+        # The user's query should be contained in the song field for partial matches.
+        if value and q in value:
             filtered.append(song)
 
     return filtered
@@ -258,3 +260,4 @@ def history_summary(history: List[Song]) -> Dict[str, int]:
         else:
             counts[mood] += 1
     return counts
+
