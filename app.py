@@ -14,6 +14,30 @@ from playlist_logic import (
 )
 
 BASE_GENRES = ["rock", "lofi", "pop", "jazz", "electronic", "ambient", "other"]
+PROFILE_PRESETS = {
+    "Pop Energy": DEFAULT_PROFILE,
+    "Workout Boost": {
+        "name": "Workout Boost",
+        "hype_min_energy": 7,
+        "chill_max_energy": 2,
+        "favorite_genre": "rock",
+        "include_mixed": False,
+    },
+    "Focus Flow": {
+        "name": "Focus Flow",
+        "hype_min_energy": 9,
+        "chill_max_energy": 4,
+        "favorite_genre": "lofi",
+        "include_mixed": True,
+    },
+    "Night Wind Down": {
+        "name": "Night Wind Down",
+        "hype_min_energy": 10,
+        "chill_max_energy": 5,
+        "favorite_genre": "ambient",
+        "include_mixed": True,
+    },
+}
 
 
 def genre_options():
@@ -32,8 +56,16 @@ def init_state():
     """Initialize Streamlit session state."""
     if "songs" not in st.session_state:
         st.session_state.songs = default_songs()
+    # Normalize existing session data so stored artist names use title case.
+    st.session_state.songs = [
+        normalize_song(song) for song in st.session_state.songs
+    ]
     if "profile" not in st.session_state:
         st.session_state.profile = dict(DEFAULT_PROFILE)
+    if "profile_preset" not in st.session_state:
+        st.session_state.profile_preset = DEFAULT_PROFILE["name"]
+    if "loaded_profile_preset" not in st.session_state:
+        st.session_state.loaded_profile_preset = DEFAULT_PROFILE["name"]
     if "history" not in st.session_state:
         st.session_state.history = []
 
@@ -238,6 +270,15 @@ def profile_sidebar():
     st.sidebar.header("Mood profile")
 
     profile = st.session_state.profile
+    selected_preset = st.sidebar.selectbox(
+        "Recall profile",
+        options=list(PROFILE_PRESETS),
+        key="profile_preset",
+    )
+    if selected_preset != st.session_state.loaded_profile_preset:
+        profile.clear()
+        profile.update(PROFILE_PRESETS[selected_preset])
+        st.session_state.loaded_profile_preset = selected_preset
 
     profile["name"] = st.sidebar.text_input(
         "Profile name",
@@ -269,6 +310,7 @@ def profile_sidebar():
         "Favorite genre",
         options=genres,
         index=genres.index(current_genre),
+        format_func=lambda genre: str(genre).title(),
     )
 
     profile["include_mixed"] = st.sidebar.checkbox(
@@ -327,6 +369,53 @@ def playlist_tabs(playlists):
 
 def render_playlist(label, songs):
     st.subheader(f"{label} playlist")
+    # Playlist editors add normalized songs to the shared library, then refresh
+    # this view so the active profile can classify the new song.
+    if st.button(f"Edit {label} playlist", key=f"edit_playlist_{label}"):
+        st.session_state.editing_playlist = label
+
+    if st.session_state.get("editing_playlist") == label:
+        with st.form(key=f"add_song_{label}"):
+            st.write(f"Add a song to the {label} playlist")
+            title = st.text_input("Title", key=f"edit_title_{label}")
+            artist = st.text_input("Artist", key=f"edit_artist_{label}")
+            genre = st.selectbox(
+                "Genre",
+                options=genre_options(),
+                key=f"edit_genre_{label}",
+            )
+            energy = st.slider(
+                "Energy",
+                min_value=1,
+                max_value=10,
+                value=5,
+                key=f"edit_energy_{label}",
+            )
+            tags_text = st.text_input(
+                "Tags (comma separated)",
+                key=f"edit_tags_{label}",
+            )
+            submitted = st.form_submit_button("Add song")
+
+        if submitted:
+            if not title.strip() or not artist.strip():
+                st.error("Title and artist are required.")
+            else:
+                raw_tags = [tag.strip() for tag in tags_text.split(",")]
+                song: Song = {
+                    "title": title,
+                    "artist": artist,
+                    "genre": genre,
+                    "energy": energy,
+                    "tags": [tag for tag in raw_tags if tag][:MAX_TAGS],
+                }
+                st.session_state.songs = [
+                    *st.session_state.songs,
+                    normalize_song(song),
+                ]
+                st.session_state.editing_playlist = None
+                st.rerun()
+
     if not songs:
         st.write("No songs in this playlist.")
         return
@@ -341,8 +430,10 @@ def render_playlist(label, songs):
     for song in filtered:
         mood = song.get("mood", "?")
         tags = ", ".join(song.get("tags", []))
+        # Normalize legacy session data before displaying the artist name.
+        display_artist = normalize_song(song)["artist"]
         st.write(
-            f"- **{song['title']}** by {song['artist']} "
+            f"- **{song['title']}** by {display_artist} "
             f"(genre {song['genre']}, energy {song['energy']}, mood {mood}) "
             f"[{tags}]"
         )
@@ -424,7 +515,9 @@ def clear_controls():
     """Render a small section for clearing data."""
     st.sidebar.header("Manage data")
     if st.sidebar.button("Reset songs to default"):
-        st.session_state.songs = default_songs()
+        st.session_state.songs = [
+            normalize_song(song) for song in default_songs()
+        ]
     if st.sidebar.button("Clear history"):
         st.session_state.history = []
 
